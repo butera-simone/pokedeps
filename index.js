@@ -56,7 +56,13 @@ class ObjTemplate {
 moduleMap.set(folderName, new ObjTemplate(folder))
 
 function readJSONFile (filePath) {
-  const fileContent = fs.readFileSync(filePath, 'utf-8')
+  let fileContent = ''
+  try {
+    fileContent = fs.readFileSync(filePath, 'utf-8')
+  } catch (err) {
+    console.log(`Target directory ${filePath} does not exist or does not have a package.json`)
+    process.exit(1)
+  }
   return JSON.parse(fileContent)
 }
 
@@ -202,16 +208,21 @@ digraph {
 `
 }
 
-function main () {
+async function main () {
   createMapOfDeps(folder)
   moduleMap.forEach((value, key) => feedInfoToAncestors(key, findCritical(findPathsFromRoot(key))))
   if (GRAPH) {
     const arrayOfDeps = mapToArr()
     const dot = arrToDot(arrayOfDeps)
     const pathToGraph = `${GRAPH}/${folderName}_deps_graph.svg`
-    graphviz.dot(dot, 'svg').then((svg) => {
+    await graphviz.dot(dot, 'svg').then((svg) => {
       // Write the SVG to file
-      fs.writeFileSync(pathToGraph, svg)
+      try {
+        fs.writeFileSync(pathToGraph, svg)
+      } catch (err) {
+        console.log(`The path ${pathToGraph} would require non-existing directories. Cannot create a graph there.`)
+        process.exit(1)
+      }
     })
   }
   if (SPECIFIC) {
