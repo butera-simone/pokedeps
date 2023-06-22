@@ -6,18 +6,25 @@ const { graphviz } = require('node-graphviz')
 
 const argv = require('minimist')(process.argv.slice(2), {
   alias: {
-    specific: 's',
     path: 'p',
     top: 't',
+    dev: 'd',
+    collaterals: 'c',
+    specific: 's',
     graph: 'g'
-  }
+  },
+  boolean: ['d', 'c']
 })
 
-const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-s|--specific module] [-g|--graph directory] [-h|--help]
+const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module] [-g|--graph directory] [-h|--help]
 
   --path [directory] (specifies path of the project to analyze, default is current working directory)
 
   --top [number] (specifies how many of the heaviest modules to list, default is 10)
+
+  --dev (includes dev-dependencies)
+
+  --collaterals (sort results by number of collateral modules)
 
   --specific [module] (only print info about a specific module)
 
@@ -36,12 +43,15 @@ if (argv.h) {
   process.exit(1)
 }
 
-const SPECIFIC = argv.s
 const PATH = argv.p
 const TOP = argv.t || 10
+const DEV = argv.d
+const COLLATERALS = argv.c
+const SPECIFIC = argv.s
 const GRAPH = (argv.g) ? p.resolve(argv.g) : null
 
 const moduleMap = new Map()
+const missingSet = new Set()
 const folder = (PATH) ? p.resolve(PATH) : process.cwd()
 const folderName = p.basename(folder)
 
@@ -49,7 +59,7 @@ class ObjTemplate {
   constructor (path) {
     this.ancestors = new Set()
     this.size = sizeOfDir(path)
-    this.dependents = []
+    this.collaterals = []
     this.depSize = this.size
   }
 }
@@ -85,23 +95,26 @@ function sizeOfDir (path) {
   return sum
 }
 
-function createMapEntry (parent, child, childPath) {
-  if (!moduleMap.has(child)) {
-    moduleMap.set(child, new ObjTemplate(childPath))
-  }
-  moduleMap.get(child).ancestors.add(parent)
-}
-
 function createMapOfDeps (path, module = null) {
   const target = module ? `${path}/node_modules/${module}/package.json` : `${path}/package.json`
   module = (module === null) ? folderName : module
   const obj = readJSONFile(target)
-  if ('dependencies' in obj) {
-    const deps = Object.keys(obj.dependencies)
-    if (deps.length > 0) {
-      for (const x of deps) {
-        createMapEntry(module, x, `${path}/node_modules/${x}`)
-        createMapOfDeps(path, x)
+  let deps = []
+  if ('dependencies' in obj) deps = deps.concat(Object.keys(obj.dependencies))
+  if (DEV && module === folderName && 'devDependencies' in obj) deps = deps.concat(Object.keys(obj.devDependencies))
+  if (deps.length > 0) {
+    for (const x of deps) {
+      if (!moduleMap.has(x)) {
+        if (fs.existsSync(`${path}/node_modules/${x}`)) {
+          moduleMap.set(x, new ObjTemplate(`${path}/node_modules/${x}`))
+          moduleMap.get(x).ancestors.add(module)
+          createMapOfDeps(path, x)
+        } else {
+          console.log(Object.keys(obj.devDependencies).length + ' ' + module + ' is missing ' + x)
+          missingSet.add(x)
+        }
+      } else {
+        moduleMap.get(x).ancestors.add(module)
       }
     }
   }
@@ -163,17 +176,29 @@ function feedInfoToAncestors (module, criticals) {
   criticals.forEach((crit) => {
     if (crit === folderName) return
     const ref = moduleMap.get(crit)
-    ref.dependents.push(module)
+    ref.collaterals.push(module)
     ref.depSize += size
   })
 }
 
 function getModulesWeight () {
+  const totalWeight = moduleMap.get(folderName)
   const sizeMap = new Map()
   moduleMap.forEach((value, key) => sizeMap.set(key, value.depSize))
   const weightMap = new Map([...sizeMap.entries()].sort((a, b) => b[1] - a[1]))
   const newEntries = Array.from(weightMap, ([key, value]) =>
-    `${key} : ${moduleMap.get(key).dependents.length} dependents, ${prettySize(value)} (${percentage(weightMap.get(folderName), value)}%)`
+    `${key} : ${moduleMap.get(key).collaterals.length} collaterals, ${prettySize(value)} (${percentage(totalWeight, value)}%)`
+  )
+  return newEntries
+}
+
+function sortByCollaterals () {
+  const totalWeight = moduleMap.get(folderName)
+  const collateraslMap = new Map()
+  moduleMap.forEach((value, key) => collateraslMap.set(key, value.collaterals.length))
+  const collateraslMap2 = new Map([...collateraslMap.entries()].sort((a, b) => b[1] - a[1]))
+  const newEntries = Array.from(collateraslMap2, ([key, value]) =>
+    `${key} : ${value} collaterals, ${prettySize(moduleMap.get(key).depSize)} (${percentage(totalWeight, moduleMap.get(key).depSize)}%)`
   )
   return newEntries
 }
@@ -211,10 +236,11 @@ digraph {
 async function main () {
   createMapOfDeps(folder)
   moduleMap.forEach((value, key) => feedInfoToAncestors(key, findCritical(findPathsFromRoot(key))))
+  console.log('')
   if (GRAPH) {
     const arrayOfDeps = mapToArr()
     const dot = arrToDot(arrayOfDeps)
-    const pathToGraph = `${GRAPH}/${folderName}_deps_graph.svg`
+    const pathToGraph = DEV ? `${GRAPH}/${folderName}_depsAndDevDepsGraph.svg` : `${GRAPH}/${folderName}_depsGraph.svg`
     await graphviz.dot(dot, 'svg').then((svg) => {
       // Write the SVG to file
       try {
@@ -226,17 +252,29 @@ async function main () {
     })
   }
   if (SPECIFIC) {
-    const size = moduleMap.get(SPECIFIC).depSize
-    console.log(`${SPECIFIC} has ${moduleMap.get(SPECIFIC).dependents.length} dependents
-Cutting it would reduce size by ~${prettySize(size)}
-(${percentage(moduleMap.get(folderName).depSize, size)}% of the total project size)`)
+    const specificTarget = moduleMap.get(SPECIFIC)
+    const specificCollaterals = specificTarget.collaterals
+    const size = specificTarget.depSize
+    console.log(`${SPECIFIC} has ${specificCollaterals.length} collaterals ${specificCollaterals.length > 0 ? ':\n\n' + specificCollaterals.join('\n') + '\n' : ''}`)
+    console.log(`Cutting it would reduce size by ~${prettySize(size)}`)
+    console.log(`(${percentage(moduleMap.get(folderName).depSize, size)}% of the total project size)`)
   } else {
-    const arrayOfWeights = getModulesWeight()
-    console.log('Top modules by total weight added to the project')
-    for (let i = 1; (i <= TOP && i < arrayOfWeights.length); i++) {
-      console.log(i + ') ' + arrayOfWeights[i])
+    const finalArray = COLLATERALS ? sortByCollaterals() : getModulesWeight()
+    const firstMessage = COLLATERALS
+      ? 'Top packages by number of collateral modules'
+      : 'Top packages by total weight added to the project'
+    console.log(firstMessage)
+    for (let i = 1; (i <= TOP && i < finalArray.length); i++) {
+      console.log(i + ') ' + finalArray[i])
     }
   }
+  if (missingSet.size > 0) {
+    console.log('')
+    console.log(missingSet.size + ' dependencies not found:')
+    missingSet.forEach(dep => console.log(dep))
+  }
+
+  console.log('')
 }
 
 main()
