@@ -15,7 +15,7 @@ const argv = require('minimist')(process.argv.slice(2), {
 
 const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-s|--specific module] [-g|--graph directory] [-h|--help]
 
-  --path [directory] (specifies path of the project to analyze, sefault is current working directory)
+  --path [directory] (specifies path of the project to analyze, default is current working directory)
 
   --top [number] (specifies how many of the heaviest modules to list, default is 10)
 
