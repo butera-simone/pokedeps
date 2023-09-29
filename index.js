@@ -173,7 +173,7 @@ function findCritical (arrayOfPaths) {
 }
 
 function feedInfoToAncestors (module, criticals) {
-  const size = moduleMap.get(module).size
+  const size = moduleMap.get(module).depSize
   criticals.forEach((crit) => {
     if (crit === folderName) return
     const ref = moduleMap.get(crit)
@@ -183,7 +183,7 @@ function feedInfoToAncestors (module, criticals) {
 }
 
 function getModulesWeight () {
-  const totalWeight = moduleMap.get(folderName)
+  const totalWeight = moduleMap.get(folderName).depSize
   const sizeMap = new Map()
   moduleMap.forEach((value, key) => sizeMap.set(key, value.depSize))
   const weightMap = new Map([...sizeMap.entries()].sort((a, b) => b[1] - a[1]))
@@ -194,7 +194,7 @@ function getModulesWeight () {
 }
 
 function sortByCollaterals () {
-  const totalWeight = moduleMap.get(folderName)
+  const totalWeight = moduleMap.get(folderName).size
   const collateraslMap = new Map()
   moduleMap.forEach((value, key) => collateraslMap.set(key, value.collaterals.length))
   const collateraslMap2 = new Map([...collateraslMap.entries()].sort((a, b) => b[1] - a[1]))
