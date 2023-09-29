@@ -1,6 +1,6 @@
 {
   "name": "pokedeps",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Simple tool to analyze and visualize NPM dependencies",
   "main": "index.js",
   "scripts": {
