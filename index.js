@@ -11,7 +11,8 @@ const argv = require('minimist')(process.argv.slice(2), {
     dev: 'd',
     collaterals: 'c',
     specific: 's',
-    graph: 'g'
+    graph: 'g',
+    help: 'h'
   },
   boolean: ['d', 'c']
 })
