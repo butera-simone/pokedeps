@@ -111,7 +111,6 @@ function createMapOfDeps (path, module = null) {
           moduleMap.get(x).ancestors.add(module)
           createMapOfDeps(path, x)
         } else {
-          console.log(Object.keys(obj.devDependencies).length + ' ' + module + ' is missing ' + x)
           missingSet.add(x)
         }
       } else {
@@ -246,13 +245,13 @@ async function main () {
       // Write the SVG to file
       try {
         fs.writeFileSync(pathToGraph, svg)
+        console.log(`graph written at ${pathToGraph}`)
       } catch (err) {
         console.log(`The path ${pathToGraph} would require non-existing directories. Cannot create a graph there.`)
         process.exit(1)
       }
     })
-  }
-  if (SPECIFIC) {
+  } else if (SPECIFIC) {
     const specificTarget = moduleMap.get(SPECIFIC)
     const specificCollaterals = specificTarget.collaterals
     const size = specificTarget.depSize
