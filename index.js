@@ -9,6 +9,7 @@ const argv = require('minimist')(process.argv.slice(2), {
     path: 'p',
     top: 't',
     dev: 'd',
+    excludeOpts: 'e',
     collaterals: 'c',
     specific: 's',
     graph: 'g',
@@ -17,7 +18,7 @@ const argv = require('minimist')(process.argv.slice(2), {
   boolean: ['d', 'c']
 })
 
-const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module] [-g|--graph directory] [-h|--help]
+const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module] [-g|--graph directory] [-e|--excludeOpts] [-h|--help]
 
   --path [directory] (specifies path of the project to analyze, default is current working directory)
 
@@ -30,6 +31,8 @@ const cliHelp = `pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|
   --specific [module] (only print info about a specific module)
 
   --graph [directory] (creates an svg graph of the dependencies in the target directory)
+
+  --excludeOpts (exclude optional dependencies from the graph)
 
   --help (prints help)
 `
@@ -50,6 +53,7 @@ const DEV = argv.d
 const COLLATERALS = argv.c
 const SPECIFIC = argv.s
 const GRAPH = (argv.g) ? p.resolve(argv.g) : null
+const EXCLUDE = argv.e
 
 const moduleMap = new Map()
 const missingSet = new Set()
@@ -103,6 +107,7 @@ function createMapOfDeps (path, module = null) {
   let deps = []
   if ('dependencies' in obj) deps = deps.concat(Object.keys(obj.dependencies))
   if (DEV && module === folderName && 'devDependencies' in obj) deps = deps.concat(Object.keys(obj.devDependencies))
+  if (!EXCLUDE && 'optionalDependencies' in obj) deps = deps.concat(Object.keys(obj.optionalDependencies))
   if (deps.length > 0) {
     for (const x of deps) {
       if (!moduleMap.has(x)) {
