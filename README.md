@@ -27,7 +27,7 @@ Top modules by total weight added to the project
 You can run `pokedeps --help` to get
 
 ```bash
-pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module] [-g|--graph directory] [-h|--help]
+pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module] [-g|--graph directory] [-e|--excludeOpts] [-h|--help]
 
   --path [directory] (specifies path of the project to analyze, default is current working directory)
 
@@ -40,6 +40,8 @@ pokedeps[-p|--path directory] [-t|--top number] [-d|--dev] [-s|--specific module
   --specific [module] (only print info about a specific module)
 
   --graph [directory] (creates an svg graph of the dependencies in the target directory)
+
+  --excludeOpts (exclude optional dependencies from the graph)
 
   --help (prints help)
 ```
